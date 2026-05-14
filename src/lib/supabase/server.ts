@@ -1,12 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { clientEnv } from '@/lib/env'
 
 export async function createClient() {
   const cookieStore = await cookies()
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    clientEnv.NEXT_PUBLIC_SUPABASE_URL,
+    clientEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     {
       cookies: {
         getAll() {
@@ -18,8 +19,8 @@ export async function createClient() {
               cookieStore.set(name, value, options)
             })
           } catch {
-            // This can happen in Server Components.
-            // The proxy will handle refreshing the session.
+            // Server Components cannot always set cookies directly.
+            // The proxy refresh flow handles this.
           }
         },
       },
