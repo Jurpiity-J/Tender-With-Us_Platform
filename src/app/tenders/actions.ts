@@ -1043,6 +1043,30 @@ export async function checkTenderCompletionAction(tenderId: string) {
     redirect('/login')
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, company_id')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'sponsor' || !profile.company_id) {
+    redirectWithError('/dashboard', 'Only sponsors can check tender completion.')
+  }
+
+  const { data: tender } = await supabase
+    .from('tenders')
+    .select('sponsor_company_id, status')
+    .eq('id', tenderId)
+    .single()
+
+  if (
+    !tender ||
+    tender.sponsor_company_id !== profile.company_id ||
+    !['awarded', 'in_progress'].includes(tender.status)
+  ) {
+    redirectWithError('/dashboard/tenders', 'This tender is not available for completion.')
+  }
+
   const { error } = await supabase.rpc('complete_tender_if_ready', {
     p_tender_id: tenderId,
     p_actor_id: user.id,
