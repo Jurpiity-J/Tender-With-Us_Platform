@@ -207,7 +207,7 @@ export default async function AdminCompaniesPage({
                             </p>
                           ) : (
                             <ul className="mt-2 space-y-1 text-sm text-slate-600">
-                              {linkedProfiles.map((profile: any, index: number) => (
+                              {linkedProfiles.map((profile: { full_name: string | null; role: string }, index: number) => (
                                 <li key={index}>
                                   {profile.full_name ?? 'Unnamed user'} — {profile.role}
                                 </li>

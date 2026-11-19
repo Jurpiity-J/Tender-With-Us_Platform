@@ -1,13 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 
-function formatMoney(value: number | string | null) {
-  return new Intl.NumberFormat('en-ZA', {
-    style: 'currency',
-    currency: 'ZAR',
-  }).format(Number(value ?? 0))
-}
-
 export default async function Home() {
   const supabase = await createClient()
 
@@ -39,7 +32,7 @@ export default async function Home() {
     .order('published_at', { ascending: false })
     .limit(10)
 
-  const error = tendersError || newsError
+  const error = tendersError || flagsError || newsError
 
   if (error) {
     return (
@@ -184,12 +177,6 @@ export default async function Home() {
               </p>
             </div>
           </div>
-
-          {flagsError && (
-            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-              {flagsError.message}
-            </div>
-          )}
 
           {!flags || flags.length === 0 ? (
             <p className="mt-5 text-slate-500">

@@ -3,6 +3,12 @@ import { randomUUID } from 'crypto'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import {
+  isCompanyStatus,
+  isDocumentReviewStatus,
+  safeDashboardReturnPath,
+} from '@/lib/security/validators'
+import { validateEvidenceUpload } from '@/lib/security/file-validation'
 
 function getField(formData: FormData, key: string) {
   const value = formData.get(key)
@@ -447,6 +453,8 @@ export async function updateBidAction(bidId: string, formData: FormData) {
       proposal_summary: proposalSummary,
     })
     .eq('id', bidId)
+    .eq('submitted_by', user.id)
+    .eq('status', 'submitted')
     .select('id, amount, proposal_summary')
     .single()
 
@@ -785,6 +793,7 @@ export async function releaseMilestonePaymentAction(
 }
 
 export async function runAccountabilityScanAction(returnPath: string) {
+  const safeReturnPath = safeDashboardReturnPath(returnPath)
   const supabase = await createClient()
 
   const {
@@ -813,11 +822,6 @@ export async function runAccountabilityScanAction(returnPath: string) {
 
   const { error } = await supabase.rpc('scan_accountability_flags')
 
-  const safeReturnPath =
-    returnPath.startsWith('/') && !returnPath.startsWith('//')
-      ? returnPath
-      : '/dashboard'
-
   if (error) {
     redirectWithError(safeReturnPath, error.message)
   }
@@ -836,6 +840,7 @@ export async function adminUpdateCompanyStatusAction(
   returnPath: string,
   formData: FormData
 ) {
+  const safeReturnPath = safeDashboardReturnPath(returnPath)
   const supabase = await createClient()
 
   const {
@@ -846,10 +851,24 @@ export async function adminUpdateCompanyStatusAction(
     redirect('/login')
   }
 
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profileError || profile?.role !== 'admin') {
+    redirectWithError('/dashboard', 'Only administrators can update company status.')
+  }
+
+  if (!isCompanyStatus(status)) {
+    redirectWithError(safeReturnPath, 'Invalid company status.')
+  }
+
   const note = getField(formData, 'note')
 
   if ((status === 'rejected' || status === 'suspended') && !note) {
-    redirectWithError(returnPath, 'Please provide a reason.')
+    redirectWithError(safeReturnPath, 'Please provide a reason.')
   }
 
   const { error } = await supabase.rpc('admin_update_company_status', {
@@ -859,14 +878,14 @@ export async function adminUpdateCompanyStatusAction(
   })
 
   if (error) {
-    redirectWithError(returnPath, error.message)
+    redirectWithError(safeReturnPath, error.message)
   }
 
   revalidatePath('/dashboard/admin/companies')
   revalidatePath('/dashboard')
 
   redirect(
-    `${returnPath}?message=${encodeURIComponent(
+    `${safeReturnPath}${safeReturnPath.includes('?') ? '&' : '?'}message=${encodeURIComponent(
       `Company status updated to ${status}.`
     )}`
   )
@@ -905,44 +924,11 @@ export async function checkTenderCompletionAction(tenderId: string) {
   )
 }
 
-const MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
-
-const allowedUploadTypes = new Set([
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'text/plain',
-])
-
-const blockedExtensions = [
-  '.exe',
-  '.dll',
-  '.bat',
-  '.cmd',
-  '.ps1',
-  '.sh',
-  '.js',
-  '.html',
-  '.htm',
-  '.svg',
-  '.zip',
-  '.rar',
-  '.7z',
-  '.docm',
-  '.xlsm',
-]
-
 function cleanFileName(fileName: string) {
   return fileName
     .replace(/[^a-zA-Z0-9._-]/g, '_')
     .replace(/_+/g, '_')
     .slice(0, 120)
-}
-
-function isBlockedFileName(fileName: string) {
-  const lower = fileName.toLowerCase()
-  return blockedExtensions.some((extension) => lower.endsWith(extension))
 }
 
 async function uploadFileToQuarantine({
@@ -964,21 +950,7 @@ async function uploadFileToQuarantine({
   bidId?: string | null
   companyId?: string | null
 }) {
-  if (file.size <= 0) {
-    throw new Error('The uploaded file is empty.')
-  }
-
-  if (file.size > MAX_UPLOAD_SIZE_BYTES) {
-    throw new Error('File is too large. Maximum size is 10MB.')
-  }
-
-  if (!allowedUploadTypes.has(file.type)) {
-    throw new Error('File type is not allowed. Upload PDF, PNG, JPG, WEBP, or TXT files only.')
-  }
-
-  if (isBlockedFileName(file.name)) {
-    throw new Error('This file extension is blocked for security reasons.')
-  }
+  await validateEvidenceUpload(file)
 
   const safeName = cleanFileName(file.name)
   const storagePath = `quarantine/${userId}/${randomUUID()}-${safeName}`
@@ -1021,6 +993,7 @@ export async function adminReviewDocumentAction(
   returnPath: string,
   formData: FormData
 ) {
+  const safeReturnPath = safeDashboardReturnPath(returnPath)
   const supabase = await createClient()
 
   const {
@@ -1031,10 +1004,24 @@ export async function adminReviewDocumentAction(
     redirect('/login')
   }
 
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profileError || profile?.role !== 'admin') {
+    redirectWithError('/dashboard', 'Only administrators can review documents.')
+  }
+
+  if (!isDocumentReviewStatus(scanStatus)) {
+    redirectWithError(safeReturnPath, 'Invalid document review status.')
+  }
+
   const note = getField(formData, 'note')
 
   if ((scanStatus === 'quarantined' || scanStatus === 'rejected') && !note) {
-    redirectWithError(returnPath, 'Please provide a reason.')
+    redirectWithError(safeReturnPath, 'Please provide a reason.')
   }
 
   const { error } = await supabase.rpc('admin_review_document', {
@@ -1044,7 +1031,7 @@ export async function adminReviewDocumentAction(
   })
 
   if (error) {
-    redirectWithError(returnPath, error.message)
+    redirectWithError(safeReturnPath, error.message)
   }
 
   revalidatePath('/dashboard/admin/documents')
@@ -1052,7 +1039,7 @@ export async function adminReviewDocumentAction(
   revalidatePath('/tenders')
 
   redirect(
-    `${returnPath}?message=${encodeURIComponent(
+    `${safeReturnPath}${safeReturnPath.includes('?') ? '&' : '?'}message=${encodeURIComponent(
       `Document marked as ${scanStatus}.`
     )}`
   )
