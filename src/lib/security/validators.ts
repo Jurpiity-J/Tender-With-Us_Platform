@@ -45,6 +45,7 @@ export function safeDashboardReturnPath(value: unknown): string {
 
 const COMPANY_STATUSES = new Set(['pending', 'verified', 'rejected', 'suspended'])
 const DOCUMENT_REVIEW_STATUSES = new Set(['clean', 'quarantined', 'rejected'])
+const MILESTONE_REVIEW_DECISIONS = new Set(['verified', 'rejected'])
 
 export function isCompanyStatus(value: unknown): value is 'pending' | 'verified' | 'rejected' | 'suspended' {
   return typeof value === 'string' && COMPANY_STATUSES.has(value)
@@ -52,4 +53,8 @@ export function isCompanyStatus(value: unknown): value is 'pending' | 'verified'
 
 export function isDocumentReviewStatus(value: unknown): value is 'clean' | 'quarantined' | 'rejected' {
   return typeof value === 'string' && DOCUMENT_REVIEW_STATUSES.has(value)
+}
+
+export function isMilestoneReviewDecision(value: unknown): value is 'verified' | 'rejected' {
+  return typeof value === 'string' && MILESTONE_REVIEW_DECISIONS.has(value)
 }

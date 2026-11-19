@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   isCompanyStatus,
   isDocumentReviewStatus,
+  isMilestoneReviewDecision,
   safeDashboardReturnPath,
 } from '../src/lib/security/validators.ts'
 
@@ -36,4 +37,6 @@ test('enforces allowed runtime values for privileged mutations', () => {
   assert.equal(isCompanyStatus('admin'), false)
   assert.equal(isDocumentReviewStatus('quarantined'), true)
   assert.equal(isDocumentReviewStatus('pending_scan'), false)
+  assert.equal(isMilestoneReviewDecision('verified'), true)
+  assert.equal(isMilestoneReviewDecision('released'), false)
 })

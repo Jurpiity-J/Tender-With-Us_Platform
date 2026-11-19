@@ -20,11 +20,13 @@ The platform aims to make public procurement traceable from tender publication t
 
 | ID | Priority | Finding / task | Acceptance criteria | Verification |
 | --- | --- | --- | --- | --- |
-| SEC-01 | P0 | Admin status and document-review Server Actions lack explicit admin authorization. Other sensitive RPC wrappers need authorization review. | Unauthorized roles are rejected at the action boundary; DB-level permissions are independently reviewed. | Unit tests of authorization/redirect helpers and Supabase integration tests with each role. |
+| SEC-01 | P0 | Admin status and document-review Server Actions originally lacked explicit admin authorization. Award, review, payment and evidence RPC wrappers also needed sponsor/bidder ownership checks. | Unauthorized roles are rejected at the action boundary; DB-level permissions are independently reviewed. | Unit tests of validation helpers and Supabase integration tests with each role. |
 | SEC-02 | P0 | Supabase schema, RLS policies, function grants and storage policies are absent from source control, so RPC and data-access security cannot be audited or reproduced. | Versioned, reviewed migrations match a known disposable instance; cross-tenant reads/writes and unauthorized RPC execution are denied. | Seeded integration suite against an isolated test Supabase project. **Requires authorized schema export.** |
 | SEC-03 | P0 | The scanner submits uploaded evidence to VirusTotal, which may disclose commercially sensitive documents to a third party. | Explicit document-handling policy and informed consent or a privacy-preserving scanning alternative; no sensitive production upload until decided. | Data-flow/privacy review and controlled scanner tests. **Requires owner decision.** |
 | SEC-04 | P1 | Some Server Actions accept untrusted return paths or runtime enum values. | Redirects remain on validated app paths; invalid status/decision values fail closed. | Automated negative-case tests. |
 | DATA-01 | P1 | Milestone sequence numbers are allocated using read-then-insert, creating a concurrent insert race. | Sequence allocation is transaction-safe with an appropriate unique constraint. | Parallel milestone-creation integration test. **Requires DB migration.** |
+| DATA-04 | P0 | The supplied table definitions show `currency character` although the app writes `ZAR`, and no uniqueness constraint on `(tender_id, bidder_company_id)` in `bids`. | Currency safely stores 3-letter codes, and concurrent duplicate company bids are prevented at the DB boundary. | Inspect existing values/duplicates, then test reviewed migration in an isolated database. |
+| DATA-05 | P0 | `tenders.awarded_bid_id` references a bid ID without ensuring it belongs to the same tender. | Cross-tender awards are impossible, regardless of the client or RPC caller. | Negative-case DB integration tests against `award_tender` and relevant constraints. |
 | DATA-02 | P1 | Evidence is submitted via RPC before file upload; failed upload may leave a submitted milestone without its intended file. | Partial-failure handling is explicitly represented, retriable and consistent with business rules. | Injected upload failure/integration tests. **Requires workflow decision/DB access.** |
 | DATA-03 | P1 | Some multi-step workflows create audit/news records separately from their main mutation; failures may leave incomplete trails. | Mutations and audit side effects have agreed transactional or recoverable semantics. | Fault-injection tests against test DB. |
 | BUILD-01 | P1 | Deno function is type-checked as part of Next.js app, breaking build. | Next.js `tsc` and build pass without masking app errors; Deno function has a separate validation path. | `npx tsc --noEmit`, `npm run build`, Deno check when available. |
@@ -42,6 +44,8 @@ The platform aims to make public procurement traceable from tender publication t
 
 1. **Repository-only safety improvements:** `SEC-01` (action-boundary checks), `SEC-04`, `BUILD-01`, `BUILD-02`, `TEST-01`, `OPS-01`.
 2. **Database restoration/audit:** obtain a sanitized schema export, migration history and access to a disposable Supabase environment; then address `SEC-02`, `DATA-01`, `DATA-02`, `DATA-03`.
+   The first table-only description revealed additional `DATA-04` and `DATA-05`
+   checks; see [docs/DATABASE_AUDIT.md](docs/DATABASE_AUDIT.md) for read-only SQL.
 3. **Privacy decision:** resolve `SEC-03` before making document scanning available for sensitive real-world tender evidence.
 4. **Feature verification:** registration, sponsor company verification, bidding, award, evidence, payment and public accountability in role-isolated integration tests.
 5. **Product quality:** UX/accessibility, performance, deployment runbook and final security review.

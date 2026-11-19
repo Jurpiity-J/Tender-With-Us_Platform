@@ -23,7 +23,7 @@ Last updated: 19 November 2026
 | Item | Status | Notes |
 | --- | --- | --- |
 | Repository discovery and baseline | Completed | Next.js 16, 399 installed packages, source and script inventory |
-| `SEC-01`, `SEC-04` action safety | Partially completed | Admin action roles and runtime enums checked; dashboard redirects validated; unreviewed RPC wrappers remain |
+| `SEC-01`, `SEC-04` action safety | Partially completed | Admin roles and enums checked; sponsor ownership and bidder-award checks added to award/review/payment/evidence actions; dashboard redirects validated; database RPC authorization remains unverified |
 | `BUILD-01` type/build | Completed for Next.js | Deno function excluded from Next TypeScript project; separate Deno validation pending |
 | `BUILD-02` lint | Completed | Removed eight `any` lint errors, unused import, and handled previously ignored flag errors |
 | `TEST-01` unit tests | Partially completed | Eight unit tests pass; Supabase role/RLS integration tests remain |
@@ -32,6 +32,7 @@ Last updated: 19 November 2026
 | `DEP-01` vulnerable dependencies | Completed locally | Next.js and ESLint config upgraded to 16.4.6; compatible lockfile fixes applied; production `npm audit` reports 0 vulnerabilities |
 | PR quality gate | Added locally | GitHub Actions workflow for tests, lint, type-check and build; first remote run not yet observed |
 | `SEC-02` database authorization audit | Blocked | No SQL migrations in repo; obtain schema and isolated test DB |
+| Table-only schema review | In progress | Owner supplied ten table definitions; structural findings in `docs/DATABASE_AUDIT.md`; RLS, functions, storage settings and enum definitions remain unknown |
 | `SEC-03` VirusTotal privacy review | Blocked | Owner decision needed before production processing |
 | `DATA-01` to `DATA-03` integrity | Blocked | Requires reviewed DB schema and integration environment |
 | UX, performance, deployment | Pending | After security/data gates |
