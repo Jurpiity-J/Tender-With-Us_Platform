@@ -52,19 +52,15 @@ Admins can verify companies, reject or suspend companies, review quarantined doc
 
 Auditor functionality is planned as a read-only oversight role for tenders, companies, flags, documents, payments, and audit logs.
 
-## Security Features
+## Security design (partially implemented; database rules unverified)
 
-- Role-based access control
-- Supabase Row Level Security policies
-- Private file storage bucket
+- Role checks in selected Server Actions; complete authorization audit pending
+- Supabase Row Level Security and private storage policies required but not versioned here
 - Quarantine-first file upload model
-- Uploaded files start as `pending_scan`
-- Only `clean` files can be exposed publicly
-- Suspicious files remain `quarantined`
-- Blocked file extensions for dangerous upload types
-- File size and MIME type checks
-- Scanner token kept server-side
-- Audit logging for key actions
+- Uploads are intended to start as `pending_scan`, with unsafe files quarantined
+- Allowed file extension, MIME type, signature and size checks at the action boundary
+- Scanner credentials kept in Edge Function environment, not in client code
+- Database-level audit logging is planned and not independently verified
 
 ## Tech Stack
 
@@ -82,7 +78,7 @@ Auditor functionality is planned as a read-only oversight role for tenders, comp
 
 This is an MVP/prototype for a transparent public procurement platform.
 
-Current lifecycle supported:
+Intended lifecycle represented by the code (end-to-end database testing still required):
 
 1. Company registers
 2. Admin verifies company
@@ -98,9 +94,61 @@ Current lifecycle supported:
 
 ## Environment Variables
 
-Create a `.env.local` file using `.env.example` as a guide.
+Create a `.env.local` file using the tracked `.env.example` as a guide. Only
+public Supabase connection settings belong in Next.js environment variables.
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_or_anon_key
-SCANNER_INTERNAL_TOKEN=your_private_scanner_token
+```
+
+Configure `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VIRUSTOTAL_API_KEY`,
+and `SCANNER_INTERNAL_TOKEN` **only** in the server-side Supabase Edge Function
+environment. Never expose a service-role key, scanner token, or VirusTotal key
+through a `NEXT_PUBLIC_` variable.
+
+## Local development
+
+Requires Node.js 24 or another version supported by the project's installed
+Next.js 16 toolchain and an appropriately configured Supabase development project.
+
+```bash
+npm ci
+npm run dev
+```
+
+Open the local URL printed by Next.js. The application requires the matching
+Supabase database tables, storage bucket, RLS policies, and PostgreSQL RPCs.
+**Their migrations are not currently included in this repository**, so a fresh
+database cannot yet reproduce the complete tender workflow.
+
+### Local quality checks
+
+```bash
+npm test
+npm run lint
+npx tsc --noEmit
+npm run build
+```
+
+The Next.js TypeScript project intentionally excludes the Deno Edge Function.
+The function needs its own Deno validation and integration tests before release.
+
+## Security and readiness notes
+
+- Server Actions now verify administrator role for company and document-review
+  mutations, validate privileged enum inputs, and normalize dashboard return paths.
+- Evidence uploads have a 10 MiB limit, restricted extensions/MIME types, basic
+  file-signature checks, and a quarantine-first code path. These checks **do not
+  replace** database storage policies or malware scanning.
+- The scanner currently sends complete files to VirusTotal. **Do not process
+  confidential tenders, personal information, or other sensitive evidence** until
+  an appropriate data-sharing policy and consent or a private scanning method
+  have been approved.
+- Role-based PostgreSQL RPC permissions, RLS, storage bucket policies, and
+  transaction behavior require a separate database audit. Their security has
+  **not** been verified by the repository-only checks.
+- This is an MVP/prototype, **not a verified production-ready procurement system**.
+
+See [PROJECT_ROADMAP.md](PROJECT_ROADMAP.md) for prioritized requirements and
+[PROJECT_STATUS.md](PROJECT_STATUS.md) for verified work and remaining blockers.
