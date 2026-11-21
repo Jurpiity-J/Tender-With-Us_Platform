@@ -78,3 +78,35 @@ SELECT trim(currency::text) AS stored_currency, count(*) AS tender_count
 FROM public.tenders
 GROUP BY trim(currency::text)
 ORDER BY stored_currency;
+
+-- 6) Resolve a mismatch between a Dashboard-generated description of
+-- tenders.currency (shown as "character") and stored values of "ZAR".
+-- format_type includes the actual length/type modifier.
+SELECT a.attname AS column_name,
+       format_type(a.atttypid, a.atttypmod) AS actual_data_type,
+       pg_get_expr(d.adbin, d.adrelid) AS default_expression
+FROM pg_attribute AS a
+LEFT JOIN pg_attrdef AS d
+  ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+WHERE a.attrelid = 'public.tenders'::regclass
+  AND a.attname = 'currency'
+  AND NOT a.attisdropped;
+
+-- 7) Unique indexes may exist even if a table-only export omitted them.
+-- Check before proposing any additional constraints.
+SELECT tablename, indexname, indexdef
+FROM pg_indexes
+WHERE schemaname = 'public'
+  AND tablename IN ('bids', 'milestones', 'transactions', 'flags', 'tenders')
+ORDER BY tablename, indexname;
+
+-- 8) Review the two existing validation triggers before changing bid identity
+-- or milestone constraints. The function source may contain internal logic;
+-- inspect/redact anything sensitive before sharing the results.
+SELECT p.oid::regprocedure AS function_name,
+       pg_get_functiondef(p.oid) AS function_definition
+FROM pg_proc AS p
+JOIN pg_namespace AS n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname IN ('prevent_bid_identity_changes', 'validate_milestone_amounts')
+ORDER BY p.proname;
