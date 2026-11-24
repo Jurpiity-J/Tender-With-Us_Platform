@@ -955,10 +955,8 @@ export async function runAccountabilityScanAction(returnPath: string) {
     redirectWithError('/dashboard', 'Could not load your profile.')
   }
 
-  const allowedRoles = ['admin', 'sponsor', 'auditor', 'procurement_officer']
-
-  if (!allowedRoles.includes(profile.role)) {
-    redirectWithError('/dashboard', 'You do not have permission to run accountability scans.')
+  if (profile.role !== 'admin') {
+    redirectWithError('/dashboard', 'Only administrators can run accountability scans.')
   }
 
   const { error } = await supabase.rpc('scan_accountability_flags')
