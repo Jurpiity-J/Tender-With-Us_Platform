@@ -1,9 +1,15 @@
 import { redirect } from 'next/navigation'
 import { logoutAction } from '@/app/auth/actions'
+import { runAccountabilityScanAction } from '@/app/tenders/actions'
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 
-export default async function DashboardPage() {
+type DashboardPageProps = {
+  searchParams: Promise<{ message?: string; error?: string }>
+}
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const query = await searchParams
   const supabase = await createClient()
 
   const {
@@ -79,6 +85,16 @@ export default async function DashboardPage() {
     <main className="min-h-screen bg-gray-50 px-6 py-12">
       <div className="mx-auto max-w-4xl">
         <div className="rounded-2xl bg-white p-8 shadow-sm">
+          {query.error && (
+            <p role="alert" className="mb-4 rounded-lg bg-red-50 p-4 text-sm text-red-800">
+              {query.error}
+            </p>
+          )}
+          {query.message && (
+            <p role="status" className="mb-4 rounded-lg bg-green-50 p-4 text-sm text-green-800">
+              {query.message}
+            </p>
+          )}
           <div className="flex items-start justify-between gap-6">
             <div>
               <p className="text-sm uppercase tracking-wide text-gray-500">
@@ -176,15 +192,26 @@ export default async function DashboardPage() {
               {profile.role === 'admin' && (
                 <div className="mt-3">
                   <p className="text-gray-600">
-                    Review company registrations and manage verification status.
+                    Review company registrations, manage verification status,
+                    and monitor platform-wide accountability.
                   </p>
 
-                  <Link
-                    href="/dashboard/admin/companies"
-                    className="mt-4 inline-flex rounded-lg bg-black px-4 py-2 text-sm font-medium text-white"
-                  >
-                    Company verification
-                  </Link>
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <Link
+                      href="/dashboard/admin/companies"
+                      className="inline-flex rounded-lg bg-black px-4 py-2 text-sm font-medium text-white"
+                    >
+                      Company verification
+                    </Link>
+                    <form action={runAccountabilityScanAction.bind(null, '/dashboard')}>
+                      <button
+                        type="submit"
+                        className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-50"
+                      >
+                        Run platform accountability scan
+                      </button>
+                    </form>
+                  </div>
                 </div>
               )}
             </div>
