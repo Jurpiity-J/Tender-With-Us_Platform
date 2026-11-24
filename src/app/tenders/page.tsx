@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import type { PublicTenderSearchResult } from '@/lib/types/accountability'
 
 type PublicTendersPageProps = {
   searchParams: Promise<{
@@ -231,7 +232,7 @@ export default async function PublicTendersPage({
             </div>
           ) : (
             <div className="mt-6 grid gap-5">
-              {tenders.map((tender: any) => {
+              {(tenders as PublicTenderSearchResult[]).map((tender) => {
                 const workProgress = clampPercent(
                   tender.work_progress_percentage
                 )

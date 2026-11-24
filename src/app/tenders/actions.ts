@@ -3,6 +3,13 @@ import { randomUUID } from 'crypto'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import {
+  isCompanyStatus,
+  isDocumentReviewStatus,
+  isMilestoneReviewDecision,
+  safeDashboardReturnPath,
+} from '@/lib/security/validators'
+import { validateEvidenceUpload } from '@/lib/security/file-validation'
 
 function getField(formData: FormData, key: string) {
   const value = formData.get(key)
@@ -447,6 +454,8 @@ export async function updateBidAction(bidId: string, formData: FormData) {
       proposal_summary: proposalSummary,
     })
     .eq('id', bidId)
+    .eq('submitted_by', user.id)
+    .eq('status', 'submitted')
     .select('id, amount, proposal_summary')
     .single()
 
@@ -489,6 +498,36 @@ export async function awardTenderAction(tenderId: string, bidId: string) {
 
   if (!user) {
     redirect('/login')
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, company_id')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'sponsor' || !profile.company_id) {
+    redirectWithError('/dashboard', 'Only sponsors can award tenders.')
+  }
+
+  const { data: tender } = await supabase
+    .from('tenders')
+    .select('sponsor_company_id, status')
+    .eq('id', tenderId)
+    .single()
+
+  if (!tender || tender.sponsor_company_id !== profile.company_id || tender.status !== 'published') {
+    redirectWithError('/dashboard/tenders', 'This tender is not available for award.')
+  }
+
+  const { data: bid } = await supabase
+    .from('bids')
+    .select('tender_id, status')
+    .eq('id', bidId)
+    .single()
+
+  if (!bid || bid.tender_id !== tenderId || bid.status !== 'submitted') {
+    redirectWithError(`/dashboard/tenders/${tenderId}`, 'The selected bid is not eligible for award.')
   }
 
   const { error } = await supabase.rpc('award_tender', {
@@ -659,6 +698,55 @@ export async function submitMilestoneEvidenceAction(
     )
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, company_id')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'bidder' || !profile.company_id) {
+    redirectWithError('/dashboard', 'Only bidders can submit milestone evidence.')
+  }
+
+  const { data: milestone } = await supabase
+    .from('milestones')
+    .select('tender_id')
+    .eq('id', milestoneId)
+    .single()
+
+  const { data: tender } = await supabase
+    .from('tenders')
+    .select('awarded_bid_id')
+    .eq('id', tenderId)
+    .single()
+
+  if (milestone?.tender_id !== tenderId || !tender?.awarded_bid_id) {
+    redirectWithError('/dashboard/projects', 'This milestone is not assigned to your project.')
+  }
+
+  const { data: winningBid } = await supabase
+    .from('bids')
+    .select('bidder_company_id')
+    .eq('id', tender.awarded_bid_id)
+    .single()
+
+  if (!winningBid || winningBid.bidder_company_id !== profile.company_id) {
+    redirectWithError('/dashboard/projects', 'You are not the awarded bidder for this project.')
+  }
+
+  // Reject malformed files before the RPC changes milestone status. The
+  // remaining upload/database consistency gap needs an atomic DB workflow.
+  if (evidenceFile instanceof File && evidenceFile.size > 0) {
+    try {
+      await validateEvidenceUpload(evidenceFile)
+    } catch (validationError) {
+      redirectWithError(
+        `/dashboard/projects/${tenderId}`,
+        validationError instanceof Error ? validationError.message : 'Invalid evidence file.'
+      )
+    }
+  }
+
   const { error } = await supabase.rpc('submit_milestone_evidence', {
     p_milestone_id: milestoneId,
     p_progress_summary: progressSummary,
@@ -726,6 +814,36 @@ export async function reviewMilestoneEvidenceAction(
     redirect('/login')
   }
 
+  if (!isMilestoneReviewDecision(decision)) {
+    redirectWithError(`/dashboard/tenders/${tenderId}`, 'Invalid milestone review decision.')
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, company_id')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'sponsor' || !profile.company_id) {
+    redirectWithError('/dashboard', 'Only sponsors can review milestone evidence.')
+  }
+
+  const { data: tender } = await supabase
+    .from('tenders')
+    .select('sponsor_company_id')
+    .eq('id', tenderId)
+    .single()
+
+  const { data: milestone } = await supabase
+    .from('milestones')
+    .select('tender_id')
+    .eq('id', milestoneId)
+    .single()
+
+  if (!tender || tender.sponsor_company_id !== profile.company_id || milestone?.tender_id !== tenderId) {
+    redirectWithError('/dashboard/tenders', 'This milestone is not available for review.')
+  }
+
   const note = getField(formData, 'note')
 
   if (decision === 'rejected' && !note) {
@@ -766,6 +884,37 @@ export async function releaseMilestonePaymentAction(
     redirect('/login')
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, company_id')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'sponsor' || !profile.company_id) {
+    redirectWithError('/dashboard', 'Only sponsors can release payments.')
+  }
+
+  const { data: tender } = await supabase
+    .from('tenders')
+    .select('sponsor_company_id')
+    .eq('id', tenderId)
+    .single()
+
+  const { data: transaction } = await supabase
+    .from('transactions')
+    .select('tender_id, sponsor_company_id')
+    .eq('id', transactionId)
+    .single()
+
+  if (
+    !tender ||
+    tender.sponsor_company_id !== profile.company_id ||
+    transaction?.tender_id !== tenderId ||
+    transaction.sponsor_company_id !== profile.company_id
+  ) {
+    redirectWithError('/dashboard/tenders', 'This payment is not available for release.')
+  }
+
   const { error } = await supabase.rpc('release_milestone_payment', {
     p_transaction_id: transactionId,
   })
@@ -785,6 +934,7 @@ export async function releaseMilestonePaymentAction(
 }
 
 export async function runAccountabilityScanAction(returnPath: string) {
+  const safeReturnPath = safeDashboardReturnPath(returnPath)
   const supabase = await createClient()
 
   const {
@@ -805,18 +955,11 @@ export async function runAccountabilityScanAction(returnPath: string) {
     redirectWithError('/dashboard', 'Could not load your profile.')
   }
 
-  const allowedRoles = ['admin', 'sponsor', 'auditor', 'procurement_officer']
-
-  if (!allowedRoles.includes(profile.role)) {
-    redirectWithError('/dashboard', 'You do not have permission to run accountability scans.')
+  if (profile.role !== 'admin') {
+    redirectWithError('/dashboard', 'Only administrators can run accountability scans.')
   }
 
   const { error } = await supabase.rpc('scan_accountability_flags')
-
-  const safeReturnPath =
-    returnPath.startsWith('/') && !returnPath.startsWith('//')
-      ? returnPath
-      : '/dashboard'
 
   if (error) {
     redirectWithError(safeReturnPath, error.message)
@@ -836,6 +979,7 @@ export async function adminUpdateCompanyStatusAction(
   returnPath: string,
   formData: FormData
 ) {
+  const safeReturnPath = safeDashboardReturnPath(returnPath)
   const supabase = await createClient()
 
   const {
@@ -846,10 +990,24 @@ export async function adminUpdateCompanyStatusAction(
     redirect('/login')
   }
 
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profileError || profile?.role !== 'admin') {
+    redirectWithError('/dashboard', 'Only administrators can update company status.')
+  }
+
+  if (!isCompanyStatus(status)) {
+    redirectWithError(safeReturnPath, 'Invalid company status.')
+  }
+
   const note = getField(formData, 'note')
 
   if ((status === 'rejected' || status === 'suspended') && !note) {
-    redirectWithError(returnPath, 'Please provide a reason.')
+    redirectWithError(safeReturnPath, 'Please provide a reason.')
   }
 
   const { error } = await supabase.rpc('admin_update_company_status', {
@@ -859,14 +1017,14 @@ export async function adminUpdateCompanyStatusAction(
   })
 
   if (error) {
-    redirectWithError(returnPath, error.message)
+    redirectWithError(safeReturnPath, error.message)
   }
 
   revalidatePath('/dashboard/admin/companies')
   revalidatePath('/dashboard')
 
   redirect(
-    `${returnPath}?message=${encodeURIComponent(
+    `${safeReturnPath}${safeReturnPath.includes('?') ? '&' : '?'}message=${encodeURIComponent(
       `Company status updated to ${status}.`
     )}`
   )
@@ -881,6 +1039,30 @@ export async function checkTenderCompletionAction(tenderId: string) {
 
   if (!user) {
     redirect('/login')
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, company_id')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'sponsor' || !profile.company_id) {
+    redirectWithError('/dashboard', 'Only sponsors can check tender completion.')
+  }
+
+  const { data: tender } = await supabase
+    .from('tenders')
+    .select('sponsor_company_id, status')
+    .eq('id', tenderId)
+    .single()
+
+  if (
+    !tender ||
+    tender.sponsor_company_id !== profile.company_id ||
+    !['awarded', 'in_progress'].includes(tender.status)
+  ) {
+    redirectWithError('/dashboard/tenders', 'This tender is not available for completion.')
   }
 
   const { error } = await supabase.rpc('complete_tender_if_ready', {
@@ -905,44 +1087,11 @@ export async function checkTenderCompletionAction(tenderId: string) {
   )
 }
 
-const MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
-
-const allowedUploadTypes = new Set([
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'text/plain',
-])
-
-const blockedExtensions = [
-  '.exe',
-  '.dll',
-  '.bat',
-  '.cmd',
-  '.ps1',
-  '.sh',
-  '.js',
-  '.html',
-  '.htm',
-  '.svg',
-  '.zip',
-  '.rar',
-  '.7z',
-  '.docm',
-  '.xlsm',
-]
-
 function cleanFileName(fileName: string) {
   return fileName
     .replace(/[^a-zA-Z0-9._-]/g, '_')
     .replace(/_+/g, '_')
     .slice(0, 120)
-}
-
-function isBlockedFileName(fileName: string) {
-  const lower = fileName.toLowerCase()
-  return blockedExtensions.some((extension) => lower.endsWith(extension))
 }
 
 async function uploadFileToQuarantine({
@@ -964,21 +1113,7 @@ async function uploadFileToQuarantine({
   bidId?: string | null
   companyId?: string | null
 }) {
-  if (file.size <= 0) {
-    throw new Error('The uploaded file is empty.')
-  }
-
-  if (file.size > MAX_UPLOAD_SIZE_BYTES) {
-    throw new Error('File is too large. Maximum size is 10MB.')
-  }
-
-  if (!allowedUploadTypes.has(file.type)) {
-    throw new Error('File type is not allowed. Upload PDF, PNG, JPG, WEBP, or TXT files only.')
-  }
-
-  if (isBlockedFileName(file.name)) {
-    throw new Error('This file extension is blocked for security reasons.')
-  }
+  await validateEvidenceUpload(file)
 
   const safeName = cleanFileName(file.name)
   const storagePath = `quarantine/${userId}/${randomUUID()}-${safeName}`
@@ -1021,6 +1156,7 @@ export async function adminReviewDocumentAction(
   returnPath: string,
   formData: FormData
 ) {
+  const safeReturnPath = safeDashboardReturnPath(returnPath)
   const supabase = await createClient()
 
   const {
@@ -1031,10 +1167,24 @@ export async function adminReviewDocumentAction(
     redirect('/login')
   }
 
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profileError || profile?.role !== 'admin') {
+    redirectWithError('/dashboard', 'Only administrators can review documents.')
+  }
+
+  if (!isDocumentReviewStatus(scanStatus)) {
+    redirectWithError(safeReturnPath, 'Invalid document review status.')
+  }
+
   const note = getField(formData, 'note')
 
   if ((scanStatus === 'quarantined' || scanStatus === 'rejected') && !note) {
-    redirectWithError(returnPath, 'Please provide a reason.')
+    redirectWithError(safeReturnPath, 'Please provide a reason.')
   }
 
   const { error } = await supabase.rpc('admin_review_document', {
@@ -1044,7 +1194,7 @@ export async function adminReviewDocumentAction(
   })
 
   if (error) {
-    redirectWithError(returnPath, error.message)
+    redirectWithError(safeReturnPath, error.message)
   }
 
   revalidatePath('/dashboard/admin/documents')
@@ -1052,7 +1202,7 @@ export async function adminReviewDocumentAction(
   revalidatePath('/tenders')
 
   redirect(
-    `${returnPath}?message=${encodeURIComponent(
+    `${safeReturnPath}${safeReturnPath.includes('?') ? '&' : '?'}message=${encodeURIComponent(
       `Document marked as ${scanStatus}.`
     )}`
   )

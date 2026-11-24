@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import type { PublicCompanyAccountability } from '@/lib/types/accountability'
 
 type CompanyPageProps = {
   params: Promise<{
@@ -75,7 +76,7 @@ export default async function CompanyPage({ params }: CompanyPageProps) {
     )
   }
 
-  const snapshot = data as any
+  const snapshot = data as unknown as PublicCompanyAccountability
   const company = snapshot.company
   const reputation = snapshot.reputation
   const flags = snapshot.active_flags ?? []
@@ -180,7 +181,7 @@ export default async function CompanyPage({ params }: CompanyPageProps) {
             </p>
           ) : (
             <div className="mt-6 grid gap-4">
-              {awardedTenders.map((tender: any) => {
+              {awardedTenders.map((tender) => {
                 const workProgress = clampPercent(tender.work_progress_percentage)
                 const paymentProgress = clampPercent(tender.payment_progress_percentage)
 
@@ -242,7 +243,7 @@ export default async function CompanyPage({ params }: CompanyPageProps) {
             </p>
           ) : (
             <div className="mt-6 grid gap-4">
-              {flags.map((flag: any) => (
+              {flags.map((flag) => (
                 <article
                   key={flag.id}
                   className="rounded-2xl border border-amber-200 bg-amber-50 p-5"

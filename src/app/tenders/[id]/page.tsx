@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { submitBidAction } from '@/app/tenders/actions'
 import { createClient } from '@/lib/supabase/server'
+import type { PublicTenderAccountability } from '@/lib/types/accountability'
 
 type TenderDetailPageProps = {
   params: Promise<{
@@ -102,7 +103,7 @@ export default async function TenderDetailPage({
     )
   }
 
-  const accountability = data as any
+  const accountability = data as unknown as PublicTenderAccountability
   const tender = accountability.tender
   const sponsor = accountability.sponsor
   const awardedBid = accountability.awarded_bid
@@ -303,7 +304,7 @@ export default async function TenderDetailPage({
             </div>
 
             <p className="text-sm text-slate-500">
-              {progress.total_milestones} milestone(s)
+              {progress?.total_milestones ?? milestones.length} milestone(s)
             </p>
           </div>
 
@@ -315,7 +316,7 @@ export default async function TenderDetailPage({
             </div>
           ) : (
             <div className="mt-6 grid gap-4">
-              {milestones.map((milestone: any) => (
+              {milestones.map((milestone) => (
                 <article
                   key={milestone.id}
                   className="rounded-2xl border border-slate-200 bg-slate-50 p-6"
@@ -425,7 +426,7 @@ export default async function TenderDetailPage({
             </div>
           ) : (
             <div className="mt-6 grid gap-4">
-              {flags.map((flag: any) => (
+              {flags.map((flag) => (
                 <article
                   key={flag.id}
                   className="rounded-xl border border-amber-200 bg-amber-50 p-5"
