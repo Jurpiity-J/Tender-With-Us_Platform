@@ -2,6 +2,10 @@
 
 A transparent public tender management and accountability platform built with Next.js, Supabase, PostgreSQL, Tailwind CSS, and Supabase Edge Functions.
 
+**Vercel deployment:** [Open Tender-With-Us](https://tender-with-us-platform-gg7wtbpgx-jj-laphis-projects.vercel.app/)
+
+> Project preview: this is an MVP/prototype. Database-level access rules and end-to-end security checks remain under review; do not use it for real procurement or sensitive records.
+
 The platform is designed to make public procurement more transparent by tracking tenders, bids, awarded companies, milestones, evidence submissions, payment releases, public risk flags and company reputation history.
 
 ## Purpose
