@@ -736,6 +736,13 @@ export default async function SponsorTenderDetailPage({
               <p className="mt-2 text-slate-600">
                 Review bidder submissions and award one bid.
               </p>
+
+              {tender.status === 'published' &&
+                new Date(tender.submission_deadline) > new Date() && (
+                  <p className="mt-2 text-sm text-amber-700">
+                    Bidding is still open. Awards become available after the submission deadline.
+                  </p>
+                )}
             </div>
 
             <p className="text-sm text-slate-500">
@@ -768,7 +775,9 @@ export default async function SponsorTenderDetailPage({
 
                 const isAwarded = tender.awarded_bid_id === bid.id
                 const canAward =
-                  tender.status === 'published' && bid.status === 'submitted'
+                  tender.status === 'published' &&
+                  bid.status === 'submitted' &&
+                  new Date(tender.submission_deadline) <= new Date()
 
                 return (
                   <article

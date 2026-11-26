@@ -512,12 +512,19 @@ export async function awardTenderAction(tenderId: string, bidId: string) {
 
   const { data: tender } = await supabase
     .from('tenders')
-    .select('sponsor_company_id, status')
+    .select('sponsor_company_id, status, submission_deadline')
     .eq('id', tenderId)
     .single()
 
   if (!tender || tender.sponsor_company_id !== profile.company_id || tender.status !== 'published') {
     redirectWithError('/dashboard/tenders', 'This tender is not available for award.')
+  }
+
+  if (new Date(tender.submission_deadline) > new Date()) {
+    redirectWithError(
+      `/dashboard/tenders/${tenderId}`,
+      'Bidding must close before this tender can be awarded.'
+    )
   }
 
   const { data: bid } = await supabase
