@@ -23,6 +23,9 @@ This project provides a public-facing accountability layer where tenders are tra
 - Payment release tracking
 - Automatic tender completion when all milestones are paid
 - Public tender register with search and filters
+- Free guided help chatbot with published-tender lookup
+- Role-based Help Centre at `/help`
+- Read-only public tender JSON API
 - Public citizen view of awarded company, milestones, progress, payments, and flags
 - Company reputation score and flag history
 - Upload quarantine system for evidence files
@@ -133,6 +136,21 @@ npm run build
 
 The Next.js TypeScript project intentionally excludes the Deno Edge Function.
 The function needs its own Deno validation and integration tests before release.
+
+## Help Centre and public tender API
+
+- `/help` gives visitors, bidders, sponsors and administrators short instructions
+  and answers to common questions.
+- The floating **Need help?** button opens a rule-based guide. It can explain
+  platform workflows and query the public tender API; it does not use a paid AI
+  service or store chat messages in Supabase.
+- `GET /api/public/tenders?status=published&limit=5` returns a JSON object with
+  `tenders` and `count`. Optional parameters: `status`, `q` (title search), and
+  `limit` (default 5, maximum 20). This endpoint never changes records.
+
+The endpoint permits only publicly visible tender statuses and selected public
+fields. Supabase RLS is an additional access boundary; the API does not use a
+service-role key. Test anonymously and as each role before production use.
 
 ## Security and readiness notes
 
