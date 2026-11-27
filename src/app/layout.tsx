@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import AuthNavbar from '@/components/AuthNavbar'
+import TenderHelpChat from '@/components/TenderHelpChat'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -17,6 +18,7 @@ export default function RootLayout({
       <body>
         <AuthNavbar />
         {children}
+        <TenderHelpChat />
       </body>
     </html>
   )
